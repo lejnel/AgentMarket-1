@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -9,8 +9,8 @@ import {
   Image,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { simulateNegotiation } from '../../services/agentNegotiator'
 import { getListing } from '../../services/listings'
+import { calculateListingDistanceKm, readStoredMarketplaceLocation } from '../../utils/location'
 
 interface Listing {
   id: string
@@ -30,8 +30,6 @@ export default function ListingDetailScreen() {
   const router = useRouter()
   const [listing, setListing] = useState<Listing | null>(null)
   const [loading, setLoading] = useState(true)
-  const [negotiating, setNegotiating] = useState(false)
-  const [negotiationLog, setNegotiationLog] = useState<any[]>([])
 
   useEffect(() => {
     fetchListing()
@@ -57,29 +55,32 @@ export default function ListingDetailScreen() {
     }
   }
 
-  function handleNegotiate() {
+  function handleMessageSeller() {
     if (!listing) return
-    setNegotiating(true)
 
-    setTimeout(() => {
-      const jsonld = {
-        '@context': 'https://schema.org',
-        '@type': 'Product',
-        id: listing.id,
-        name: listing.title,
-        price: listing.price,
-        location: { km: listing.distance_km },
-        ai: {
-          specifications: listing.specifications || {},
-          condition_rating: listing.condition_rating,
-          negotiation_logic: listing.negotiation_logic,
-        },
+    router.push({
+      pathname: '/messaging',
+      params: {
+        listingId: listing.id,
+        listingTitle: listing.title,
+      },
+    })
+  }
+
+  function formatSpecificationValue(value: any) {
+    if (value && typeof value === 'object') {
+      if (typeof value.label === 'string') {
+        return value.label
       }
 
-      const log = simulateNegotiation(jsonld)
-      setNegotiationLog(log)
-      setNegotiating(false)
-    }, 1500)
+      if (typeof value.lat === 'number' && typeof value.lon === 'number') {
+        return `${value.lat.toFixed(4)}, ${value.lon.toFixed(4)}`
+      }
+
+      return JSON.stringify(value)
+    }
+
+    return String(value)
   }
 
   if (loading) {
@@ -136,7 +137,7 @@ export default function ListingDetailScreen() {
       <View style={styles.infoGrid}>
         <View style={styles.infoCard}>
           <Text style={styles.infoLabel}>DISTANCE</Text>
-          <Text style={styles.infoValue}>{listing.distance_km} km</Text>
+          <Text style={styles.infoValue}>{calculateListingDistanceKm(listing, readStoredMarketplaceLocation()).toFixed(1)} km</Text>
           {listing.distance_origin && <Text style={styles.infoSubValue}>{listing.distance_origin}</Text>}
         </View>
         <View style={styles.infoCard}>
@@ -154,45 +155,15 @@ export default function ListingDetailScreen() {
           {Object.entries(listing.specifications).map(([key, value]) => (
             <View key={key} style={styles.specRow}>
               <Text style={styles.specKey}>{key.toUpperCase()}</Text>
-              <Text style={styles.specValue}>{String(value)}</Text>
+              <Text style={styles.specValue}>{formatSpecificationValue(value)}</Text>
             </View>
           ))}
         </View>
       )}
 
-      {/* Negotiation */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>AGENT NEGOTIATION</Text>
-
-        <Pressable
-          style={[styles.negotiateBtn, negotiating && styles.negotiateBtnDisabled]}
-          onPress={handleNegotiate}
-          disabled={negotiating}
-        >
-          {negotiating ? (
-            <ActivityIndicator size="small" color="#002f65" />
-          ) : (
-            <Text style={styles.negotiateBtnText}>START NEGOTIATION</Text>
-          )}
-        </Pressable>
-
-        {negotiationLog.length > 0 && (
-          <View style={styles.logContainer}>
-            {negotiationLog.map((entry, idx) => (
-              <View key={idx} style={styles.logRow}>
-                <Text style={[styles.logActor, entry.actor === 'AgentBuyer' && styles.logBuyer]}>
-                  {entry.actor.replace('Agent', '')}:
-                </Text>
-                <Text style={styles.logMessage}>{entry.message}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-
       {/* Actions */}
       <View style={styles.actions}>
-        <Pressable style={styles.secondaryBtn}>
+        <Pressable style={styles.secondaryBtn} onPress={handleMessageSeller}>
           <Text style={styles.secondaryBtnText}>MESSAGE SELLER</Text>
         </Pressable>
         <Pressable style={styles.primaryBtn}>

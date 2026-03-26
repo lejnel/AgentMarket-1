@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { useLocalSearchParams } from 'expo-router'
 import { supabase } from '../services/supabase'
 
 interface Message {
@@ -24,6 +25,7 @@ interface Message {
 
 export default function MessagingScreen() {
   const router = useRouter()
+  const { listingTitle } = useLocalSearchParams<{ listingTitle?: string }>()
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -131,6 +133,9 @@ export default function MessagingScreen() {
             <View style={styles.statusDot} />
             <Text style={styles.statusText}>Claw Online</Text>
           </View>
+          {listingTitle ? (
+            <Text style={styles.contextText}>About: {Array.isArray(listingTitle) ? listingTitle[0] : listingTitle}</Text>
+          ) : null}
         </View>
         <Pressable
           style={[styles.spamToggle, showSpam && styles.spamToggleActive]}
@@ -297,6 +302,12 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 11,
     color: '#00e1ab',
+  },
+  contextText: {
+    color: '#8f9095',
+    fontSize: 10,
+    marginTop: 4,
+    maxWidth: 240,
   },
   spamToggle: {
     padding: 8,

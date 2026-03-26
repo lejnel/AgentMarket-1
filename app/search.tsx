@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router'
 import { searchListings as searchListingsService } from '../services/listings'
 import { truncate, formatPrice, formatDistance } from '../utils/helpers'
+import { calculateListingDistanceKm, readStoredMarketplaceLocation } from '../utils/location'
 
 interface SearchResult {
   id: string
@@ -39,12 +40,13 @@ export default function SearchScreen() {
 
     setLoading(true)
     try {
+      const viewerLocation = readStoredMarketplaceLocation()
       const data = await searchListingsService(searchQuery)
       setResults(data.map((listing) => ({
         id: listing.id,
         title: listing.title,
         price: listing.price,
-        distance_km: listing.distance_km,
+        distance_km: calculateListingDistanceKm(listing, viewerLocation),
         condition_rating: listing.condition_rating,
       })))
     } catch (err) {

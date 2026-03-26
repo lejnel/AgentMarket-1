@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { deleteListing, getAdminListings, hideListing, type Listing, unhideListing } from '../services/listings'
 import { getOwnedListingIds, removeOwnedListingId } from '../utils/listingOwnership'
@@ -54,16 +54,29 @@ export default function ManageListingsScreen() {
     await loadData()
   }
 
+  async function performDelete(id: string) {
+    await deleteListing(id)
+    removeOwnedListingId(id)
+    await loadData()
+  }
+
   function handleDelete(id: string, title: string) {
-    Alert.alert('Delete Listing', `Delete ${title}?`, [
+    const prompt = `Delete ${title}?`
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(prompt)) {
+        void performDelete(id)
+      }
+      return
+    }
+
+    Alert.alert('Delete Listing', prompt, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          await deleteListing(id)
-          removeOwnedListingId(id)
-          await loadData()
+        onPress: () => {
+          void performDelete(id)
         },
       },
     ])

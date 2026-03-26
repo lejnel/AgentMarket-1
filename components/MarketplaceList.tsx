@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View,
   FlatList,
@@ -11,30 +11,45 @@ import {
   TextInput,
 } from 'react-native'
 import Slider from '@react-native-community/slider'
+import { useRouter } from 'expo-router'
 import AgentCard from './AgentCard'
-import { simulateNegotiation } from '../services/agentNegotiator'
 import { getListings, Listing } from '../services/listings'
 import { useAgentIdentity } from '../context/AgentIdentityContext'
+import { searchLocationSuggestions } from '../services/locationSearch'
+import {
+  calculateListingDistanceKm,
+  readStoredMarketplaceLocation,
+  storeMarketplaceLocation,
+  type MarketplaceLocation,
+} from '../utils/location'
 
 export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
+  const router = useRouter()
   const { identity } = useAgentIdentity()
   const [distanceFilterKm, setDistanceFilterKm] = useState(25)
-  const [locationLabel, setLocationLabel] = useState(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      return window.localStorage.getItem('agentmarket.location') || 'Aarhus, Denmark'
+  const [location, setLocation] = useState<MarketplaceLocation>(() => {
+    const storedLocation = readStoredMarketplaceLocation()
+    if (storedLocation) {
+      return storedLocation
     }
-    return 'Aarhus, Denmark'
+
+    return {
+      label: 'Aarhus, Denmark',
+      lat: Number.NaN,
+      lon: Number.NaN,
+    }
   })
-  const [negotiationLog, setNegotiationLog] = useState<any[]>([])
-  const [listings, setListings] = useState<Listing[]>([])
+  const [locationFocused, setLocationFocused] = useState(false)
+  const [locationLoading, setLocationLoading] = useState(false)
+  const [allListings, setAllListings] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const fetchListings = useCallback(async () => {
     try {
-      const data = await getListings({ maxDistance: distanceFilterKm })
-      setListings(data)
+      const data = await getListings()
+      setAllListings(data)
       setError(null)
     } catch (err) {
       setError('Failed to load listings')
@@ -42,12 +57,12 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
     } finally {
       setLoading(false)
     }
-  }, [distanceFilterKm])
+  }, [])
 
   useEffect(() => {
     setLoading(true)
     fetchListings()
-  }, [distanceFilterKm])
+  }, [fetchListings])
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') {
@@ -63,10 +78,76 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
   }, [fetchListings])
 
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.localStorage.setItem('agentmarket.location', locationLabel)
+    if (!locationFocused) {
+      setLocationLoading(false)
+      return
     }
-  }, [locationLabel])
+
+    const query = location.label.trim()
+    if (query.length < 2) {
+      setLocationLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(async () => {
+      setLocationLoading(true)
+
+      try {
+        const suggestions = await searchLocationSuggestions(query, controller.signal)
+        if (controller.signal.aborted) {
+          return
+        }
+
+        const resolved = suggestions[0]
+        if (resolved) {
+          const nextLocation: MarketplaceLocation = {
+            label: resolved.label,
+            lat: resolved.lat,
+            lon: resolved.lon,
+            placeId: resolved.id,
+            countryCode: resolved.countryCode,
+          }
+          setLocation(nextLocation)
+          storeMarketplaceLocation(nextLocation)
+        }
+      } catch {
+        // Ignore lookup failures and keep the last known location.
+      } finally {
+        if (!controller.signal.aborted) {
+          setLocationLoading(false)
+        }
+      }
+    }, 300)
+
+    return () => {
+      controller.abort()
+      clearTimeout(timeoutId)
+    }
+  }, [location.label, locationFocused])
+
+  useEffect(() => {
+    if (locationFocused) {
+      return
+    }
+
+    if (location.label.trim()) {
+      storeMarketplaceLocation(location)
+    }
+  }, [location, locationFocused])
+
+  const visibleListings = useMemo(() => {
+    return allListings
+      .map((listing) => {
+        const computedDistanceKm = calculateListingDistanceKm(listing, location)
+        return {
+          ...listing,
+          computedDistanceKm,
+        }
+      })
+      .filter((listing) => listing.computedDistanceKm <= distanceFilterKm)
+      .sort((left, right) => left.computedDistanceKm - right.computedDistanceKm)
+  }, [allListings, distanceFilterKm, location])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -78,7 +159,7 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
     id: listing.id,
     title: listing.title,
     price: listing.price,
-    distanceKm: listing.distance_km,
+    distanceKm: (listing as Listing & { computedDistanceKm?: number }).computedDistanceKm ?? listing.distance_km,
     distanceOrigin: listing.distance_origin,
     images: listing.image_urls || [],
     jsonld: {
@@ -87,7 +168,7 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
       id: `urn:agent:${listing.id}`,
       name: listing.title,
       price: listing.price,
-      location: { km: listing.distance_km },
+      location: { km: (listing as Listing & { computedDistanceKm?: number }).computedDistanceKm ?? listing.distance_km },
       ai: {
         specifications: listing.specifications || {},
         condition_rating: listing.condition_rating,
@@ -98,9 +179,8 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
 
   const isWebGrid = Platform.OS === 'web' && !showRaw
 
-  function handleNegotiate(item: any) {
-    const log = simulateNegotiation(item.jsonld)
-    setNegotiationLog((s) => [...log, ...s])
+  function handleOpenListing(listingId: string) {
+    router.push(`/listing/${listingId}`)
   }
 
   if (loading) {
@@ -136,11 +216,19 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
           <Text style={styles.locationLabel}>FROM</Text>
           <TextInput
             style={styles.locationInput}
-            value={locationLabel}
-            onChangeText={setLocationLabel}
-            placeholder="Change location"
+            value={location.label}
+            onChangeText={(text) => {
+              setLocation({ label: text, lat: Number.NaN, lon: Number.NaN })
+              setLocationFocused(true)
+            }}
+            onFocus={() => setLocationFocused(true)}
+            onBlur={() => {
+              setTimeout(() => setLocationFocused(false), 120)
+            }}
+            placeholder="Search location"
             placeholderTextColor="#8f9095"
           />
+          {locationLoading && <Text style={styles.locationStatus}>Searching...</Text>}
         </View>
       </View>
 
@@ -164,15 +252,15 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
       </View>
 
       {/* Listing Count */}
-      <Text style={styles.countText}>{listings.length} listings found</Text>
+      <Text style={styles.countText}>{visibleListings.length} listings found</Text>
 
       {/* Listings */}
       <FlatList
         key={isWebGrid ? 'market-grid' : 'market-list'}
-        data={listings.map(formatListingForCard)}
+        data={visibleListings.map(formatListingForCard)}
         keyExtractor={(i) => i.id}
         renderItem={({ item }) => (
-          <AgentCard item={item} onPress={() => handleNegotiate(item)} showRaw={showRaw} compact={isWebGrid} />
+          <AgentCard item={item} onPress={() => handleOpenListing(item.id)} showRaw={showRaw} compact={isWebGrid} />
         )}
         numColumns={isWebGrid ? 2 : 1}
         columnWrapperStyle={isWebGrid ? styles.gridRow : undefined}
@@ -187,20 +275,6 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
         contentContainerStyle={styles.listContent}
       />
 
-      {/* Negotiation Log */}
-      <View style={styles.logContainer}>
-        <Text style={styles.logTitle}>NEGOTIATION LOG</Text>
-        {negotiationLog.length === 0 ? (
-          <Text style={styles.emptyLog}>Tap a listing to start negotiation</Text>
-        ) : (
-          negotiationLog.slice(0, 5).map((e, idx) => (
-            <View key={idx} style={styles.logRow}>
-              <Text style={styles.logActor}>{e.actor}:</Text>
-              <Text style={styles.logMsg}>{e.message}</Text>
-            </View>
-          ))
-        )}
-      </View>
     </View>
   )
 }
@@ -293,6 +367,11 @@ const styles = StyleSheet.create({
     color: '#dae2fd',
     fontSize: 12,
     paddingVertical: 0,
+  },
+  locationStatus: {
+    color: '#8f9095',
+    fontSize: 10,
+    marginLeft: 8,
   },
   filterContainer: {
     flexDirection: 'row',

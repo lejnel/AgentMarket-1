@@ -14,7 +14,6 @@ import {
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { createListingAPI } from '../services/api'
-import { denmarkCitySuggestions } from '../constants/denmarkCities'
 import {
   marketplaceCategoryLabels,
   getMarketplaceSubcategories,
@@ -22,6 +21,11 @@ import {
 } from '../constants/goimagineCategories'
 import { addOwnedListingId } from '../utils/listingOwnership'
 import { getActiveAgentId } from '../utils/activeAgent'
+import {
+  resolveLocationSuggestion,
+  searchLocationSuggestions,
+  type LocationSuggestion,
+} from '../services/locationSearch'
 
 interface FormErrors {
   title?: string
@@ -42,6 +46,9 @@ export default function CreateListingScreen() {
   const [subCategoryOpen, setSubCategoryOpen] = useState(false)
   const [distanceOrigin, setDistanceOrigin] = useState('')
   const [distanceOriginFocused, setDistanceOriginFocused] = useState(false)
+  const [distanceOriginLoading, setDistanceOriginLoading] = useState(false)
+  const [distanceOriginSuggestions, setDistanceOriginSuggestions] = useState<LocationSuggestion[]>([])
+  const [selectedDistanceOrigin, setSelectedDistanceOrigin] = useState<LocationSuggestion | null>(null)
   const [images, setImages] = useState<string[]>([])
   const [isNegotiable, setIsNegotiable] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -59,23 +66,52 @@ export default function CreateListingScreen() {
     }
   }, [mainCategory, subCategory, subcategoryOptions])
 
-  const distanceOriginSuggestions = useMemo(() => {
-    const query = distanceOrigin.trim().toLowerCase()
-    if (query.length < 2) return []
+  useEffect(() => {
+    if (!distanceOriginFocused) {
+      setDistanceOriginLoading(false)
+      return
+    }
 
-    const startsWithMatches = denmarkCitySuggestions.filter((city) => city.toLowerCase().startsWith(query))
-    const containsMatches = denmarkCitySuggestions.filter(
-      (city) => !city.toLowerCase().startsWith(query) && city.toLowerCase().includes(query)
-    )
+    const query = distanceOrigin.trim()
+    if (query.length < 2) {
+      setDistanceOriginSuggestions([])
+      setDistanceOriginLoading(false)
+      return
+    }
 
-    return [...startsWithMatches, ...containsMatches].slice(0, 6)
-  }, [distanceOrigin])
+    const controller = new AbortController()
+    const timeoutId = setTimeout(async () => {
+      setDistanceOriginLoading(true)
+      try {
+        const suggestions = await searchLocationSuggestions(query, controller.signal)
+        if (!controller.signal.aborted) {
+          setDistanceOriginSuggestions(suggestions.slice(0, 6))
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setDistanceOriginSuggestions([])
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setDistanceOriginLoading(false)
+        }
+      }
+    }, 300)
 
-  const showDistanceOriginSuggestions = distanceOriginFocused && distanceOriginSuggestions.length > 0
+    return () => {
+      controller.abort()
+      clearTimeout(timeoutId)
+    }
+  }, [distanceOrigin, distanceOriginFocused])
 
-  function handleDistanceOriginSelect(city: string) {
-    setDistanceOrigin(city)
+  const showDistanceOriginSuggestions =
+    distanceOriginFocused && (distanceOriginLoading || distanceOriginSuggestions.length > 0)
+
+  function handleDistanceOriginSelect(city: LocationSuggestion) {
+    setDistanceOrigin(city.label)
+    setSelectedDistanceOrigin(city)
     setDistanceOriginFocused(false)
+    setDistanceOriginSuggestions([])
   }
 
   const validateForm = (): boolean => {
@@ -144,6 +180,10 @@ export default function CreateListingScreen() {
     setSuccess(false)
 
     try {
+      const resolvedDistanceOrigin =
+        selectedDistanceOrigin ||
+        (distanceOrigin.trim() ? await resolveLocationSuggestion(distanceOrigin.trim()) : null)
+
       const result = await createListingAPI({
         title,
         description,
@@ -159,6 +199,15 @@ export default function CreateListingScreen() {
           subcategory: subCategory,
           negotiable: isNegotiable,
           distance_origin: distanceOrigin.trim() || 'Unknown',
+          distance_origin_location: resolvedDistanceOrigin
+            ? {
+                label: resolvedDistanceOrigin.label,
+                lat: resolvedDistanceOrigin.lat,
+                lon: resolvedDistanceOrigin.lon,
+                placeId: resolvedDistanceOrigin.id,
+                countryCode: resolvedDistanceOrigin.countryCode,
+              }
+            : null,
         },
         seller_id: getActiveAgentId(),
         negotiation_logic: isNegotiable ? 'standard' : 'strict',
@@ -182,6 +231,8 @@ export default function CreateListingScreen() {
       setSubCategoryOpen(false)
       setDistanceOrigin('')
       setDistanceOriginFocused(false)
+      setSelectedDistanceOrigin(null)
+      setDistanceOriginSuggestions([])
       setImages([])
       setErrors({})
 
@@ -378,14 +429,27 @@ export default function CreateListingScreen() {
         />
         {showDistanceOriginSuggestions && (
           <View style={styles.originSuggestionMenu}>
-            {distanceOriginSuggestions.map((city) => (
-              <Pressable key={city} style={styles.originSuggestionItem} onPress={() => handleDistanceOriginSelect(city)}>
-                <Text style={styles.originSuggestionText}>{city}</Text>
-              </Pressable>
-            ))}
+            {distanceOriginLoading ? (
+              <View style={styles.originSuggestionItem}>
+                <Text style={styles.originSuggestionText}>Searching worldwide locations...</Text>
+              </View>
+            ) : distanceOriginSuggestions.length > 0 ? (
+              distanceOriginSuggestions.map((location) => (
+                <Pressable key={location.id} style={styles.originSuggestionItem} onPress={() => handleDistanceOriginSelect(location)}>
+                  <Text style={styles.originSuggestionText}>{location.label}</Text>
+                  {location.subtitle !== location.label && (
+                    <Text style={styles.originSuggestionSubtext}>{location.subtitle}</Text>
+                  )}
+                </Pressable>
+              ))
+            ) : (
+              <View style={styles.originSuggestionItem}>
+                <Text style={styles.originSuggestionText}>No locations found</Text>
+              </View>
+            )}
           </View>
         )}
-        <Text style={styles.helperText}>Used as the reference point for distance in the marketplace.</Text>
+        <Text style={styles.helperText}>Search a city, street, or place anywhere in the world.</Text>
       </View>
 
       {/* Submit */}
@@ -625,6 +689,11 @@ const styles = StyleSheet.create({
   originSuggestionText: {
     color: '#dae2fd',
     fontSize: 13,
+  },
+  originSuggestionSubtext: {
+    color: '#8f9095',
+    fontSize: 11,
+    marginTop: 4,
   },
   // Buttons
   submitBtn: {
