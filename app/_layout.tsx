@@ -85,6 +85,12 @@ export default function RootLayout() {
           }}
         />
         <Tabs.Screen
+          name="manage-listings"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
           name="onboarding"
           options={{
             href: null,

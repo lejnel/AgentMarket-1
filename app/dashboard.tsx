@@ -193,9 +193,14 @@ export default function DashboardScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>YOUR LISTINGS</Text>
-          <Pressable onPress={() => router.push('/create-listing')}>
-            <Text style={styles.sectionLink}>+ NEW</Text>
-          </Pressable>
+          <View style={styles.sectionHeaderActions}>
+            <Pressable onPress={() => router.push('/manage-listings')}>
+              <Text style={styles.sectionLink}>MANAGE</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push('/create-listing')}>
+              <Text style={styles.sectionLink}>+ NEW</Text>
+            </Pressable>
+          </View>
         </View>
 
         {userListings.length === 0 ? (
@@ -246,6 +251,11 @@ export default function DashboardScreen() {
         <Pressable style={styles.actionBtnPrimary} onPress={() => router.push('/create-listing')}>
           <Text style={styles.actionIcon}>➕</Text>
           <Text style={styles.actionTextPrimary}>New Listing</Text>
+        </Pressable>
+
+        <Pressable style={styles.actionBtn} onPress={() => router.push('/manage-listings')}>
+          <Text style={styles.actionIcon}>🧰</Text>
+          <Text style={styles.actionText}>Manage</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -365,6 +375,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  sectionHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   sectionTitle: {
     fontSize: 12,

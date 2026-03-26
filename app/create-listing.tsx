@@ -14,11 +14,14 @@ import {
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { createListingAPI } from '../services/api'
+import { denmarkCitySuggestions } from '../constants/denmarkCities'
 import {
   marketplaceCategoryLabels,
   getMarketplaceSubcategories,
   type MarketplaceMainCategory,
 } from '../constants/goimagineCategories'
+import { addOwnedListingId } from '../utils/listingOwnership'
+import { getActiveAgentId } from '../utils/activeAgent'
 
 interface FormErrors {
   title?: string
@@ -38,6 +41,7 @@ export default function CreateListingScreen() {
   const [mainCategoryOpen, setMainCategoryOpen] = useState(false)
   const [subCategoryOpen, setSubCategoryOpen] = useState(false)
   const [distanceOrigin, setDistanceOrigin] = useState('')
+  const [distanceOriginFocused, setDistanceOriginFocused] = useState(false)
   const [images, setImages] = useState<string[]>([])
   const [isNegotiable, setIsNegotiable] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -54,6 +58,25 @@ export default function CreateListingScreen() {
       setSubCategory(subcategoryOptions[0] || '')
     }
   }, [mainCategory, subCategory, subcategoryOptions])
+
+  const distanceOriginSuggestions = useMemo(() => {
+    const query = distanceOrigin.trim().toLowerCase()
+    if (query.length < 2) return []
+
+    const startsWithMatches = denmarkCitySuggestions.filter((city) => city.toLowerCase().startsWith(query))
+    const containsMatches = denmarkCitySuggestions.filter(
+      (city) => !city.toLowerCase().startsWith(query) && city.toLowerCase().includes(query)
+    )
+
+    return [...startsWithMatches, ...containsMatches].slice(0, 6)
+  }, [distanceOrigin])
+
+  const showDistanceOriginSuggestions = distanceOriginFocused && distanceOriginSuggestions.length > 0
+
+  function handleDistanceOriginSelect(city: string) {
+    setDistanceOrigin(city)
+    setDistanceOriginFocused(false)
+  }
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
@@ -137,12 +160,16 @@ export default function CreateListingScreen() {
           negotiable: isNegotiable,
           distance_origin: distanceOrigin.trim() || 'Unknown',
         },
-        seller_id: 'manual_post',
+        seller_id: getActiveAgentId(),
         negotiation_logic: isNegotiable ? 'standard' : 'strict',
       })
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to create listing')
+      }
+
+      if (result.data?.id) {
+        addOwnedListingId(result.data.id)
       }
 
       setSuccess(true)
@@ -154,6 +181,7 @@ export default function CreateListingScreen() {
       setMainCategoryOpen(false)
       setSubCategoryOpen(false)
       setDistanceOrigin('')
+      setDistanceOriginFocused(false)
       setImages([])
       setErrors({})
 
@@ -339,8 +367,24 @@ export default function CreateListingScreen() {
           placeholder="e.g., Aarhus, Denmark"
           placeholderTextColor="#8f9095"
           value={distanceOrigin}
-          onChangeText={setDistanceOrigin}
+          onChangeText={(text) => {
+            setDistanceOrigin(text)
+            setDistanceOriginFocused(true)
+          }}
+          onFocus={() => setDistanceOriginFocused(true)}
+          onBlur={() => {
+            setTimeout(() => setDistanceOriginFocused(false), 120)
+          }}
         />
+        {showDistanceOriginSuggestions && (
+          <View style={styles.originSuggestionMenu}>
+            {distanceOriginSuggestions.map((city) => (
+              <Pressable key={city} style={styles.originSuggestionItem} onPress={() => handleDistanceOriginSelect(city)}>
+                <Text style={styles.originSuggestionText}>{city}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
         <Text style={styles.helperText}>Used as the reference point for distance in the marketplace.</Text>
       </View>
 
@@ -565,6 +609,22 @@ const styles = StyleSheet.create({
   },
   dropdownItemTextActive: {
     color: '#abc7ff',
+  },
+  originSuggestionMenu: {
+    backgroundColor: '#0d1117',
+    borderWidth: 1,
+    borderColor: '#222a3d',
+    marginTop: 6,
+  },
+  originSuggestionItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222a3d',
+  },
+  originSuggestionText: {
+    color: '#dae2fd',
+    fontSize: 13,
   },
   // Buttons
   submitBtn: {

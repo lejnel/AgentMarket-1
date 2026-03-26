@@ -70,6 +70,52 @@ function normalizeSellerId(sellerId?: string) {
   return looksLikeUuid ? sellerId : null
 }
 
+async function resolveSellerProfileId(sellerId?: string) {
+  const normalized = sellerId?.trim()
+  if (!normalized) return null
+
+  const uuidSellerId = normalizeSellerId(normalized)
+  if (uuidSellerId) {
+    return uuidSellerId
+  }
+
+  if (!supabase) {
+    return null
+  }
+
+  const { data: existingProfiles, error: existingError } = await supabase
+    .from('agent_profiles')
+    .select('id')
+    .eq('agent_id', normalized)
+    .limit(1)
+
+  if (existingError) {
+    throw new Error(existingError.message)
+  }
+
+  const existingProfileId = existingProfiles?.[0]?.id
+  if (existingProfileId) {
+    return existingProfileId
+  }
+
+  const fallbackName = normalized.replace(/[-_]+/g, ' ').trim() || normalized
+  const { data: createdProfile, error: createError } = await supabase
+    .from('agent_profiles')
+    .insert({
+      agent_id: normalized,
+      name: fallbackName,
+      verified: false,
+    })
+    .select('id')
+    .single()
+
+  if (createError) {
+    throw new Error(createError.message)
+  }
+
+  return createdProfile.id
+}
+
 // ============================================================
 // LISTINGS API
 // ============================================================
@@ -121,7 +167,7 @@ export async function createListingAPI(
       specifications: request.specifications || {},
       negotiation_logic: request.negotiation_logic || 'standard',
       status: 'active',
-      seller_id: normalizeSellerId(request.seller_id) || undefined,
+      seller_id: request.seller_id?.trim() || undefined,
       published_at: new Date().toISOString(),
       hidden_reason: null,
     })
@@ -157,6 +203,8 @@ export async function createListingAPI(
   }
 
   try {
+    const sellerProfileId = await resolveSellerProfileId(request.seller_id)
+
     const { data, error } = await supabase
       .from('listings')
       .insert({
@@ -174,7 +222,7 @@ export async function createListingAPI(
         negotiation_logic: request.negotiation_logic || 'standard',
         status: 'active',
         published_at: new Date().toISOString(),
-        seller_id: normalizeSellerId(request.seller_id),
+        seller_id: sellerProfileId,
       })
       .select()
       .single()

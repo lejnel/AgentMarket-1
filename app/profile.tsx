@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { supabase, isSupabaseConfigured } from '../services/supabase'
+import { getActiveAgentId } from '../utils/activeAgent'
 
 export default function ProfileScreen() {
   const router = useRouter()
@@ -38,7 +39,7 @@ export default function ProfileScreen() {
     }
 
     try {
-      const agentId = 'claw-rasmus-001'
+      const agentId = getActiveAgentId()
       const { data: agentProfiles } = await supabase
         .from('agent_profiles')
         .select('*')

@@ -121,6 +121,14 @@ export default function SettingsScreen() {
           <Text style={[styles.menuArrow, !darkMode && styles.menuArrowLight]}>→</Text>
         </Pressable>
 
+        <Pressable style={[styles.menuItem, !darkMode && styles.menuItemLight]} onPress={() => router.push('/manage-listings')}>
+          <View>
+            <Text style={[styles.menuLabel, !darkMode && styles.menuLabelLight]}>Manage Listings</Text>
+            <Text style={[styles.menuDesc, !darkMode && styles.menuDescLight]}>Hide, unhide, and delete your listings</Text>
+          </View>
+          <Text style={[styles.menuArrow, !darkMode && styles.menuArrowLight]}>→</Text>
+        </Pressable>
+
         <Pressable style={[styles.menuItem, !darkMode && styles.menuItemLight]} onPress={() => router.push('/admin')}>
           <View>
             <Text style={[styles.menuLabel, !darkMode && styles.menuLabelLight]}>Admin</Text>

@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { Link, useRouter } from 'expo-router'
 import { supabase } from '../services/supabase'
+import { setActiveAgentId } from '../utils/activeAgent'
 
 export default function AgentLinkScreen() {
   const router = useRouter()
@@ -124,6 +125,9 @@ export default function AgentLinkScreen() {
   }
 
   const handleConfirm = () => {
+    if (generatedId) {
+      setActiveAgentId(generatedId)
+    }
     setStep(3)
   }
 
