@@ -1,4 +1,12 @@
 import { supabase, isSupabaseConfigured } from './supabase'
+import { scanListingSafety, isSellerBanned } from './moderation'
+import {
+  createListing as createListingRecord,
+  deleteListing as deleteListingRecord,
+  getListing as getListingRecord,
+  getListings as getListingsRecord,
+  updateListing as updateListingRecord,
+} from './listings'
 
 // ============================================================
 // Types
@@ -9,7 +17,12 @@ export interface CreateListingRequest {
   description?: string
   price: number
   distance_km: number
+  distance_origin?: string
   condition_rating: number
+  images?: string[]
+  negotiation_logic?: 'standard' | 'aggressive' | 'strict'
+  main_category?: string
+  subcategory?: string
   specifications?: Record<string, any>
   seller_id?: string
 }
@@ -51,6 +64,12 @@ function handleError(err: unknown): string {
   return err instanceof Error ? err.message : 'Unknown error'
 }
 
+function normalizeSellerId(sellerId?: string) {
+  if (!sellerId) return null
+  const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sellerId)
+  return looksLikeUuid ? sellerId : null
+}
+
 // ============================================================
 // LISTINGS API
 // ============================================================
@@ -63,7 +82,51 @@ export async function createListingAPI(
   request: CreateListingRequest
 ): Promise<ApiResponse<{ id: string; title: string; price: number }>> {
   if (!isSupabaseConfigured || !supabase) {
-    return { success: false, error: 'Supabase not configured' }
+    if (!request.title || request.title.length < 5) {
+      return { success: false, error: 'Title must be at least 5 characters' }
+    }
+    if (request.price <= 0) {
+      return { success: false, error: 'Price must be positive' }
+    }
+    if (request.condition_rating < 0 || request.condition_rating > 1) {
+      return { success: false, error: 'Condition must be between 0 and 1' }
+    }
+
+    const safetyError = scanListingSafety({
+      title: request.title,
+      description: request.description,
+      main_category: request.main_category,
+      subcategory: request.subcategory,
+      specifications: request.specifications,
+    })
+
+    if (safetyError) {
+      return { success: false, error: safetyError }
+    }
+
+    if (isSellerBanned(request.seller_id)) {
+      return { success: false, error: 'Seller is banned from posting listings' }
+    }
+
+    const createdListing = await createListingRecord({
+      title: request.title,
+      description: request.description,
+      price: request.price,
+      distance_km: request.distance_km,
+      distance_origin: request.distance_origin,
+      image_urls: request.images,
+      main_category: request.main_category,
+      subcategory: request.subcategory,
+      condition_rating: request.condition_rating,
+      specifications: request.specifications || {},
+      negotiation_logic: request.negotiation_logic || 'standard',
+      status: 'active',
+      seller_id: normalizeSellerId(request.seller_id) || undefined,
+      published_at: new Date().toISOString(),
+      hidden_reason: null,
+    })
+
+    return { success: true, data: { id: createdListing.id, title: createdListing.title, price: createdListing.price } }
   }
 
   // Validation
@@ -77,6 +140,22 @@ export async function createListingAPI(
     return { success: false, error: 'Condition must be between 0 and 1' }
   }
 
+  const safetyError = scanListingSafety({
+    title: request.title,
+    description: request.description,
+    main_category: request.main_category,
+    subcategory: request.subcategory,
+    specifications: request.specifications,
+  })
+
+  if (safetyError) {
+    return { success: false, error: safetyError }
+  }
+
+  if (isSellerBanned(request.seller_id)) {
+    return { success: false, error: 'Seller is banned from posting listings' }
+  }
+
   try {
     const { data, error } = await supabase
       .from('listings')
@@ -86,11 +165,16 @@ export async function createListingAPI(
         description: request.description || '',
         price: request.price,
         distance_km: request.distance_km,
+        distance_origin: request.distance_origin || null,
+        image_urls: request.images || [],
+        main_category: request.main_category || null,
+        subcategory: request.subcategory || null,
         condition_rating: request.condition_rating,
         specifications: request.specifications || {},
-        negotiation_logic: 'standard',
+        negotiation_logic: request.negotiation_logic || 'standard',
         status: 'active',
-        seller_id: request.seller_id || null,
+        published_at: new Date().toISOString(),
+        seller_id: normalizeSellerId(request.seller_id),
       })
       .select()
       .single()
@@ -119,7 +203,7 @@ export async function getListingsAPI(filters?: {
   offset?: number
 }): Promise<ApiResponse<any[]>> {
   if (!isSupabaseConfigured || !supabase) {
-    return { success: false, error: 'Supabase not configured' }
+    return { success: true, data: getListingsRecord(filters) }
   }
 
   try {
@@ -162,7 +246,12 @@ export async function getListingsAPI(filters?: {
  */
 export async function getListingAPI(listingId: string): Promise<ApiResponse<any>> {
   if (!isSupabaseConfigured || !supabase) {
-    return { success: false, error: 'Supabase not configured' }
+    const listing = await getListingRecord(listingId)
+    if (!listing) {
+      return { success: false, error: 'Listing not found' }
+    }
+
+    return { success: true, data: listing }
   }
 
   try {
@@ -196,7 +285,12 @@ export async function updateListingAPI(
   }
 ): Promise<ApiResponse<{ id: string; title: string }>> {
   if (!isSupabaseConfigured || !supabase) {
-    return { success: false, error: 'Supabase not configured' }
+    const updated = await updateListingRecord(listingId, {
+      ...updates,
+      status: updates.status,
+    })
+
+    return { success: true, data: { id: updated.id, title: updated.title } }
   }
 
   try {
@@ -223,7 +317,12 @@ export async function updateListingAPI(
  */
 export async function deleteListingAPI(listingId: string): Promise<ApiResponse<{ id: string }>> {
   if (!isSupabaseConfigured || !supabase) {
-    return { success: false, error: 'Supabase not configured' }
+    const deleted = await deleteListingRecord(listingId)
+    if (!deleted) {
+      return { success: false, error: 'Listing not found' }
+    }
+
+    return { success: true, data: { id: listingId } }
   }
 
   try {

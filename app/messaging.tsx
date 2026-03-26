@@ -29,6 +29,8 @@ export default function MessagingScreen() {
   const [sending, setSending] = useState(false)
   const [inputText, setInputText] = useState('')
   const [showSpam, setShowSpam] = useState(false)
+  const [selectedParticipant, setSelectedParticipant] = useState<string | null>(null)
+  // Always show left conversation list to avoid overlapping messages
 
   useEffect(() => {
     fetchMessages()
@@ -92,9 +94,25 @@ export default function MessagingScreen() {
     }
   }
 
-  const filteredMessages = showSpam
-    ? messages.filter(m => m.spam_flag)
-    : messages.filter(m => !m.spam_flag)
+  const visibleMessages = showSpam ? messages.filter(m => m.spam_flag) : messages.filter(m => !m.spam_flag)
+
+  // derive conversation participants (other users)
+  const participants = Array.from(new Set(visibleMessages.map(m => m.sender_name).filter(n => n && n !== 'Rasmus')))
+
+  // Default select first participant when available
+  useEffect(() => {
+    if (!selectedParticipant) {
+      setSelectedParticipant(participants[0] || null)
+    } else if (selectedParticipant && !participants.includes(selectedParticipant)) {
+      // selected participant removed (e.g., spam filter) -> clear or pick first
+      setSelectedParticipant(participants[0] || null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleMessages])
+
+  const filteredMessages = selectedParticipant
+    ? visibleMessages.filter(m => m.sender_name === selectedParticipant || m.sender_name === 'Rasmus')
+    : visibleMessages
 
   return (
     <KeyboardAvoidingView
@@ -131,37 +149,73 @@ export default function MessagingScreen() {
         </Pressable>
       </View>
 
-      {/* Messages List */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#abc7ff" />
-          <Text style={styles.loadingText}>Loading messages...</Text>
+      {/* Two-column layout: conversations list + messages */}
+      <View style={styles.twoPane}>
+        {/* Left: conversations */}
+        <View style={styles.leftPane}>
+          <FlatList
+            data={participants}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => {
+              const last = visibleMessages.slice().reverse().find(m => m.sender_name === item)
+              return (
+                <Pressable
+                  style={[styles.convItem, selectedParticipant === item && styles.convItemActive]}
+                  onPress={() => setSelectedParticipant(item)}
+                >
+                  <View style={styles.convAvatar}>
+                    <Text style={styles.convAvatarText}>{item[0] || '?'}</Text>
+                  </View>
+                  <View style={styles.convMeta}>
+                    <Text style={styles.convName}>{item}</Text>
+                    <Text style={styles.convPreview}>{last?.content || ''}</Text>
+                  </View>
+                  <View style={styles.convRight}>
+                    <Text style={styles.convTime}>
+                      {last ? new Date(last.created_at).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </Text>
+                  </View>
+                </Pressable>
+              )
+            }}
+            ListEmptyComponent={<Text style={styles.emptyText}>No conversations</Text>}
+          />
         </View>
-      ) : (
-        <FlatList
-          data={filteredMessages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View
-              style={[
-                styles.messageBubble,
-                item.sender_type === 'human' ? styles.humanBubble : styles.agentBubble,
-              ]}
-            >
-              <Text style={styles.senderName}>{item.sender_name}</Text>
-              <Text style={styles.messageContent}>{item.content}</Text>
-              <Text style={styles.messageTime}>
-                {new Date(item.created_at).toLocaleTimeString('da-DK', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </Text>
+
+        {/* Right: messages for selected conversation */}
+        <View style={styles.rightPane}>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#abc7ff" />
+              <Text style={styles.loadingText}>Loading messages...</Text>
             </View>
+          ) : (
+            <FlatList
+              data={filteredMessages}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View
+                  style={[
+                    styles.messageBubble,
+                    item.sender_type === 'human' ? styles.humanBubble : styles.agentBubble,
+                  ]}
+                >
+                  <Text style={styles.senderName}>{item.sender_name}</Text>
+                  <Text style={styles.messageContent}>{item.content}</Text>
+                  <Text style={styles.messageTime}>
+                    {new Date(item.created_at).toLocaleTimeString('da-DK', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                </View>
+              )}
+              contentContainerStyle={styles.messagesList}
+              inverted={false}
+            />
           )}
-          contentContainerStyle={styles.messagesList}
-          inverted={false}
-        />
-      )}
+        </View>
+      </View>
 
       {/* Empty State */}
       {!loading && filteredMessages.length === 0 && (
@@ -180,7 +234,7 @@ export default function MessagingScreen() {
           value={inputText}
           onChangeText={setInputText}
           placeholder={showSpam ? "Can't reply to spam" : "Type a message..."}
-          placeholderTextColor="#45474b"
+          placeholderTextColor="#8f9095"
           editable={!showSpam}
           multiline
         />
@@ -259,6 +313,67 @@ const styles = StyleSheet.create({
   spamToggleTextActive: {
     opacity: 1,
   },
+  twoPane: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  leftPane: {
+    width: 280,
+    borderRightWidth: 1,
+    borderRightColor: '#151827',
+    backgroundColor: '#071029',
+    padding: 8,
+  },
+  convItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  convItemActive: {
+    backgroundColor: '#0f1a2b',
+  },
+  convAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#abc7ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  convAvatarText: {
+    color: '#002f65',
+    fontWeight: '700',
+  },
+  convMeta: {
+    flex: 1,
+  },
+  convName: {
+    color: '#dae2fd',
+    fontWeight: '700',
+  },
+  convPreview: {
+    color: '#8f9095',
+    fontSize: 12,
+  },
+  convRight: {
+    marginLeft: 8,
+    alignItems: 'flex-end',
+  },
+  convTime: {
+    color: '#8f9095',
+    fontSize: 11,
+  },
+  rightPane: {
+    flex: 1,
+    position: 'relative',
+  },
+  menuBtn: {
+    padding: 8,
+    marginRight: 8,
+  },
   spamBadge: {
     position: 'absolute',
     top: 4,
@@ -316,7 +431,7 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     marginTop: 4,
     textAlign: 'right',
   },

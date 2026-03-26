@@ -22,10 +22,16 @@ create table if not exists listings (
   price decimal not null,
   condition_rating decimal default 1.0 check (condition_rating >= 0 and condition_rating <= 1),
   distance_km decimal not null,
+  distance_origin text,
+  image_urls jsonb default '[]',
+  main_category text,
+  subcategory text,
   specifications jsonb default '{}',
   negotiation_logic text default 'standard' check (negotiation_logic in ('standard', 'aggressive', 'strict')),
   seller_id uuid references agent_profiles(id),
-  status text default 'active' check (status in ('active', 'sold', 'pending')),
+  status text default 'active' check (status in ('active', 'sold', 'pending', 'hidden')),
+  published_at timestamp with time zone default now(),
+  hidden_reason text,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );
@@ -72,6 +78,7 @@ create policy "Anyone can insert negotiation messages"
 create index if not exists listings_status_idx on listings(status);
 create index if not exists listings_distance_idx on listings(distance_km);
 create index if not exists listings_price_idx on listings(price);
+create index if not exists listings_published_idx on listings(published_at);
 create index if not exists negotiation_messages_listing_idx on negotiation_messages(listing_id);
 
 -- Function to update updated_at timestamp

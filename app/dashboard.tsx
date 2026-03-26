@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native'
-import { Link } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { supabase } from '../services/supabase'
 
 interface LinkedAgent {
@@ -34,6 +34,7 @@ interface MessageSummary {
 }
 
 export default function DashboardScreen() {
+  const router = useRouter()
   const [linkedAgents, setLinkedAgents] = useState<LinkedAgent[]>([])
   const [userListings, setUserListings] = useState<UserListing[]>([])
   const [messages, setMessages] = useState<MessageSummary>({ total: 0, unread: 0, spam: 0 })
@@ -119,9 +120,9 @@ export default function DashboardScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.avatarPlaceholder}>
+        <Pressable style={styles.avatarPlaceholder} onPress={() => router.push('/settings')}>
           <Text style={styles.avatarText}>R</Text>
-        </View>
+        </Pressable>
         <View style={styles.headerInfo}>
           <Text style={styles.greeting}>Welcome back,</Text>
           <Text style={styles.userName}>Rasmus</Text>
@@ -134,35 +135,36 @@ export default function DashboardScreen() {
 
       {/* Stats Grid */}
       <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
+        <Pressable style={styles.statCard} onPress={() => router.push('/agent-link')}>
           <Text style={styles.statNumber}>{linkedAgents.length}</Text>
           <Text style={styles.statLabel}>LINKED AGENTS</Text>
-        </View>
-        <View style={styles.statCard}>
+        </Pressable>
+        <Pressable style={styles.statCard} onPress={() => router.push('/')}>
           <Text style={styles.statNumber}>{userListings.length}</Text>
           <Text style={styles.statLabel}>LISTINGS</Text>
-        </View>
-        <View style={styles.statCard}>
+        </Pressable>
+        <Pressable style={styles.statCard} onPress={() => router.push('/messaging')}>
           <Text style={styles.statNumber}>{messages.unread}</Text>
           <Text style={styles.statLabel}>UNREAD</Text>
-        </View>
-        <View style={[styles.statCard, messages.spam > 0 && styles.statCardWarning]}>
+        </Pressable>
+        <Pressable
+          style={[styles.statCard, messages.spam > 0 && styles.statCardWarning]}
+          onPress={() => router.push('/settings')}
+        >
           <Text style={[styles.statNumber, messages.spam > 0 && styles.statNumberWarning]}>
             {messages.spam}
           </Text>
           <Text style={styles.statLabel}>SPAM</Text>
-        </View>
+        </Pressable>
       </View>
 
       {/* Linked Agents Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>LINKED AGENTS</Text>
-          <Link href="/agent-link" asChild>
-            <Pressable>
-              <Text style={styles.sectionLink}>+ ADD</Text>
-            </Pressable>
-          </Link>
+          <Pressable onPress={() => router.push('/agent-link')}>
+            <Text style={styles.sectionLink}>+ ADD</Text>
+          </Pressable>
         </View>
 
         {linkedAgents.length === 0 ? (
@@ -172,7 +174,7 @@ export default function DashboardScreen() {
           </View>
         ) : (
           linkedAgents.map((agent) => (
-            <View key={agent.id} style={styles.agentItem}>
+            <Pressable key={agent.id} style={styles.agentItem} onPress={() => router.push('/agent-link')}>
               <View style={styles.agentInfo}>
                 <Text style={styles.agentName}>{agent.agent_name}</Text>
                 <Text style={styles.agentId}>{agent.agent_id}</Text>
@@ -182,7 +184,7 @@ export default function DashboardScreen() {
                   <Text style={styles.verifiedText}>✓ VERIFIED</Text>
                 </View>
               )}
-            </View>
+            </Pressable>
           ))
         )}
       </View>
@@ -191,11 +193,9 @@ export default function DashboardScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>YOUR LISTINGS</Text>
-          <Link href="/create-listing" asChild>
-            <Pressable>
-              <Text style={styles.sectionLink}>+ NEW</Text>
-            </Pressable>
-          </Link>
+          <Pressable onPress={() => router.push('/create-listing')}>
+            <Text style={styles.sectionLink}>+ NEW</Text>
+          </Pressable>
         </View>
 
         {userListings.length === 0 ? (
@@ -205,7 +205,7 @@ export default function DashboardScreen() {
           </View>
         ) : (
           userListings.map((listing) => (
-            <View key={listing.id} style={styles.listingItem}>
+            <Pressable key={listing.id} style={styles.listingItem} onPress={() => router.push(`/listing/${listing.id}`)}>
               <View style={styles.listingInfo}>
                 <Text style={styles.listingTitle}>{listing.title}</Text>
                 <Text style={styles.listingPrice}>${listing.price.toLocaleString()}</Text>
@@ -226,33 +226,27 @@ export default function DashboardScreen() {
                   {listing.status.toUpperCase()}
                 </Text>
               </View>
-            </View>
+            </Pressable>
           ))
         )}
       </View>
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
-        <Link href="/messaging" asChild>
-          <Pressable style={styles.actionBtn}>
-            <Text style={styles.actionIcon}>💬</Text>
-            <Text style={styles.actionText}>Messages</Text>
-          </Pressable>
-        </Link>
+        <Pressable style={styles.actionBtn} onPress={() => router.push('/messaging')}>
+          <Text style={styles.actionIcon}>💬</Text>
+          <Text style={styles.actionText}>Messages</Text>
+        </Pressable>
 
-        <Link href="/" asChild>
-          <Pressable style={styles.actionBtn}>
-            <Text style={styles.actionIcon}>🏪</Text>
-            <Text style={styles.actionText}>Marketplace</Text>
-          </Pressable>
-        </Link>
+        <Pressable style={styles.actionBtn} onPress={() => router.push('/')}>
+          <Text style={styles.actionIcon}>🏪</Text>
+          <Text style={styles.actionText}>Marketplace</Text>
+        </Pressable>
 
-        <Link href="/create-listing" asChild>
-          <Pressable style={styles.actionBtnPrimary}>
-            <Text style={styles.actionIcon}>➕</Text>
-            <Text style={styles.actionTextPrimary}>New Listing</Text>
-          </Pressable>
-        </Link>
+        <Pressable style={styles.actionBtnPrimary} onPress={() => router.push('/create-listing')}>
+          <Text style={styles.actionIcon}>➕</Text>
+          <Text style={styles.actionTextPrimary}>New Listing</Text>
+        </Pressable>
       </View>
     </ScrollView>
   )
@@ -359,7 +353,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     marginTop: 4,
   },
@@ -374,7 +368,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     fontWeight: '600',
   },

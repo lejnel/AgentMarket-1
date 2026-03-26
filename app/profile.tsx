@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { supabase, isSupabaseConfigured } from '../services/supabase'
 
 export default function ProfileScreen() {
   const router = useRouter()
@@ -20,6 +21,54 @@ export default function ProfileScreen() {
     location: 'Aarhus, Denmark',
     bio: 'Industrial systems enthusiast. Building AI-powered tools.',
   })
+  const [stats, setStats] = useState({
+    listings: 3,
+    trades: 12,
+    rating: 98,
+    verified: true,
+  })
+
+  useEffect(() => {
+    fetchProfileStats()
+  }, [])
+
+  async function fetchProfileStats() {
+    if (!isSupabaseConfigured || !supabase) {
+      return
+    }
+
+    try {
+      const agentId = 'claw-rasmus-001'
+      const { data: agentProfiles } = await supabase
+        .from('agent_profiles')
+        .select('*')
+        .eq('agent_id', agentId)
+        .limit(1)
+
+      const agentProfile = agentProfiles?.[0]
+
+      if (!agentProfile) return
+
+      const { data: listingRows } = await supabase
+        .from('listings')
+        .select('status')
+        .eq('seller_id', agentProfile.id)
+
+      setProfile((current) => ({
+        ...current,
+        name: agentProfile.name || current.name,
+      }))
+
+      setStats({
+        listings: listingRows?.length || 0,
+        trades: listingRows?.filter((item) => item.status === 'sold').length || 0,
+        rating: Math.round((agentProfile.reputation_score || 0) * 100) || 0,
+        verified: Boolean(agentProfile.verified),
+      })
+    } catch (err) {
+      console.error('Failed to load profile stats:', err)
+    }
+  }
 
   function handleSave() {
     setSaving(true)
@@ -54,28 +103,28 @@ export default function ProfileScreen() {
       {/* Avatar */}
       <View style={styles.avatarSection}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>R</Text>
+          <Text style={styles.avatarText}>{profile.name.charAt(0).toUpperCase()}</Text>
         </View>
         <Text style={styles.userName}>{profile.name}</Text>
         <View style={styles.verifiedBadge}>
-          <Text style={styles.verifiedText}>✓ VERIFIED HUMAN</Text>
+          <Text style={styles.verifiedText}>✓ {stats.verified ? 'VERIFIED HUMAN' : 'UNVERIFIED'}</Text>
         </View>
       </View>
 
       {/* Stats */}
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>3</Text>
+          <Text style={styles.statNumber}>{stats.listings}</Text>
           <Text style={styles.statLabel}>LISTINGS</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>12</Text>
+          <Text style={styles.statNumber}>{stats.trades}</Text>
           <Text style={styles.statLabel}>TRADES</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>98%</Text>
+          <Text style={styles.statNumber}>{stats.rating}%</Text>
           <Text style={styles.statLabel}>RATING</Text>
         </View>
       </View>
@@ -262,7 +311,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 1,
     marginTop: 4,
   },
@@ -283,7 +332,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     marginBottom: 12,
   },
@@ -292,7 +341,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     marginBottom: 8,
   },

@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   },
   notificationTime: {
     fontSize: 11,
-    color: '#45474b',
+    color: '#8f9095',
   },
   emptyContainer: {
     alignItems: 'center',

@@ -24,10 +24,14 @@ export default function Home() {
             <Text style={styles.tagline}>AI-to-AI Trading Platform</Text>
           </View>
 
-          {/* Search Button */}
-          <Pressable style={styles.searchBtn} onPress={() => router.push('/search')}>
-            <Text style={styles.searchIcon}>🔍</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable style={styles.addBtn} onPress={() => router.push('/create-listing')}>
+              <Text style={styles.addBtnText}>+ Add Listing</Text>
+            </Pressable>
+            <Pressable style={styles.searchBtn} onPress={() => router.push('/search')}>
+              <Text style={styles.searchIcon}>🔍</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Raw Data Toggle */}
@@ -64,6 +68,11 @@ const styles = StyleSheet.create({
   headerLeft: {
     flex: 1,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   brand: {
     fontSize: 20,
     fontWeight: '700',
@@ -72,7 +81,7 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 11,
-    color: '#45474b',
+    color: '#8f9095',
     marginTop: 4,
     letterSpacing: 1,
   },
@@ -80,6 +89,17 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: '#131b2e',
     borderRadius: 4,
+  },
+  addBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#00e1ab',
+    borderRadius: 4,
+  },
+  addBtnText: {
+    color: '#002f65',
+    fontSize: 12,
+    fontWeight: '700',
   },
   searchIcon: {
     fontSize: 18,

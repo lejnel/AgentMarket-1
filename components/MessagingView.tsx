@@ -220,7 +220,7 @@ export default function MessagingView({ agentId, listingId, humanUserId }: Messa
           <TextInput
             style={styles.textInput}
             placeholder="AGENT_COMMAND_INPUT"
-            placeholderTextColor="#45474b"
+            placeholderTextColor="#8f9095"
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={sendMessage}
@@ -263,10 +263,17 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#00e1ab',
-    shadowColor: '#00e1ab',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 8px #00e1ab',
+      },
+      default: {
+        shadowColor: '#00e1ab',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+      },
+    }),
   },
   statusText: {
     fontFamily: 'Space Grotesk',
@@ -293,7 +300,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: 'uppercase',
     fontWeight: '700',
-    color: '#6b7280',
+    color: '#8f9095',
   },
   toggleTextActive: {
     color: '#abc7ff',
@@ -321,7 +328,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     letterSpacing: 3,
     textTransform: 'uppercase',
-    color: '#45474b',
+    color: '#8f9095',
     paddingVertical: 8,
   },
   // Agent Message
@@ -457,10 +464,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#131b2e',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+      },
+    }),
   },
   inputIcon: {
     paddingLeft: 16,
@@ -501,6 +515,6 @@ const styles = StyleSheet.create({
     fontSize: 8,
     textTransform: 'uppercase',
     letterSpacing: 3,
-    color: '#45474b',
+    color: '#8f9095',
   },
 })

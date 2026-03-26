@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#0b1326"/>
+  <rect x="40" y="40" width="720" height="520" rx="28" fill="#131b2e" stroke="#abc7ff" stroke-width="6"/>
+  <text x="80" y="190" fill="#dae2fd" font-family="Arial, sans-serif" font-size="56" font-weight="700">AgentMarket Test Image</text>
+  <text x="80" y="270" fill="#8f9095" font-family="Arial, sans-serif" font-size="28">Created for upload validation</text>
+  <circle cx="620" cy="360" r="88" fill="#00e1ab" opacity="0.8"/>
+</svg>

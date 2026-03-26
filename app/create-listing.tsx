@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -9,9 +9,16 @@ import {
   Alert,
   Switch,
   ActivityIndicator,
+  Image,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { supabase } from '../services/supabase'
+import * as ImagePicker from 'expo-image-picker'
+import { createListingAPI } from '../services/api'
+import {
+  marketplaceCategoryLabels,
+  getMarketplaceSubcategories,
+  type MarketplaceMainCategory,
+} from '../constants/goimagineCategories'
 
 interface FormErrors {
   title?: string
@@ -21,15 +28,32 @@ interface FormErrors {
 
 export default function CreateListingScreen() {
   const router = useRouter()
+  const defaultMainCategory = marketplaceCategoryLabels[0] as MarketplaceMainCategory
+  const defaultSubCategory = getMarketplaceSubcategories(defaultMainCategory)[0] || ''
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('')
-  const [category, setCategory] = useState('compute')
-  const [location, setLocation] = useState('')
+  const [mainCategory, setMainCategory] = useState<MarketplaceMainCategory>(defaultMainCategory)
+  const [subCategory, setSubCategory] = useState(defaultSubCategory)
+  const [mainCategoryOpen, setMainCategoryOpen] = useState(false)
+  const [subCategoryOpen, setSubCategoryOpen] = useState(false)
+  const [distanceOrigin, setDistanceOrigin] = useState('')
+  const [images, setImages] = useState<string[]>([])
   const [isNegotiable, setIsNegotiable] = useState(true)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
   const [success, setSuccess] = useState(false)
+
+  const subcategoryOptions = useMemo(
+    () => getMarketplaceSubcategories(mainCategory),
+    [mainCategory]
+  )
+
+  useEffect(() => {
+    if (!subcategoryOptions.includes(subCategory)) {
+      setSubCategory(subcategoryOptions[0] || '')
+    }
+  }, [mainCategory, subCategory, subcategoryOptions])
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
@@ -58,6 +82,38 @@ export default function CreateListingScreen() {
     return Object.keys(newErrors).length === 0
   }
 
+  const pickImages = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Please allow access to your photos to add images.')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.85,
+      base64: true,
+    })
+
+    if (result.canceled) return
+
+    const pickedImages = result.assets
+      .map((asset) => {
+        if (asset.base64) {
+          return `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
+        }
+        return asset.uri
+      })
+      .filter(Boolean)
+
+    setImages((current) => [...current, ...pickedImages])
+  }
+
+  const removeImage = (imageUri: string) => {
+    setImages((current) => current.filter((item) => item !== imageUri))
+  }
+
   const handleSubmit = async () => {
     if (!validateForm()) return
 
@@ -65,27 +121,40 @@ export default function CreateListingScreen() {
     setSuccess(false)
 
     try {
-      if (supabase) {
-        const { error } = await supabase.from('listings').insert({
-          title,
-          description,
-          price: parseFloat(price),
-          category: category || 'compute',
-          location: location || 'Denmark',
+      const result = await createListingAPI({
+        title,
+        description,
+        price: parseFloat(price),
+        distance_km: 0,
+        distance_origin: distanceOrigin.trim() || undefined,
+        condition_rating: 1,
+        images,
+        main_category: mainCategory,
+        subcategory: subCategory,
+        specifications: {
+          main_category: mainCategory,
+          subcategory: subCategory,
           negotiable: isNegotiable,
-          status: 'active',
-          agent_id: 'manual_post',
-        })
+          distance_origin: distanceOrigin.trim() || 'Unknown',
+        },
+        seller_id: 'manual_post',
+        negotiation_logic: isNegotiable ? 'standard' : 'strict',
+      })
 
-        if (error) throw error
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to create listing')
       }
 
       setSuccess(true)
       setTitle('')
       setDescription('')
       setPrice('')
-      setCategory('compute')
-      setLocation('')
+      setMainCategory(defaultMainCategory)
+      setSubCategory(defaultSubCategory)
+      setMainCategoryOpen(false)
+      setSubCategoryOpen(false)
+      setDistanceOrigin('')
+      setImages([])
       setErrors({})
 
       // Navigate to marketplace after success
@@ -114,13 +183,33 @@ export default function CreateListingScreen() {
         </View>
       )}
 
+      {/* Images */}
+      <View style={styles.field}>
+        <Text style={styles.label}>IMAGES</Text>
+        <Pressable style={styles.uploadBtn} onPress={pickImages}>
+          <Text style={styles.uploadBtnText}>ADD IMAGES</Text>
+        </Pressable>
+        {images.length > 0 && (
+          <View style={styles.imageGrid}>
+            {images.map((imageUri) => (
+              <Pressable key={imageUri} style={styles.imageThumbWrap} onPress={() => removeImage(imageUri)}>
+                <Image source={{ uri: imageUri }} style={styles.imageThumb} />
+                <View style={styles.imageThumbRemove}>
+                  <Text style={styles.imageThumbRemoveText}>✕</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+
       {/* Title */}
       <View style={styles.field}>
         <Text style={styles.label}>TITLE *</Text>
         <TextInput
           style={[styles.input, errors.title && styles.inputError]}
           placeholder="e.g., Industrial GPU Node V3"
-          placeholderTextColor="#45474b"
+          placeholderTextColor="#8f9095"
           value={title}
           onChangeText={(text) => {
             setTitle(text)
@@ -137,7 +226,7 @@ export default function CreateListingScreen() {
         <TextInput
           style={[styles.input, styles.textArea, errors.description && styles.inputError]}
           placeholder="Describe your offering..."
-          placeholderTextColor="#45474b"
+          placeholderTextColor="#8f9095"
           value={description}
           onChangeText={(text) => {
             setDescription(text)
@@ -157,7 +246,7 @@ export default function CreateListingScreen() {
           <TextInput
             style={[styles.input, errors.price && styles.inputError]}
             placeholder="0.00"
-            placeholderTextColor="#45474b"
+            placeholderTextColor="#8f9095"
             value={price}
             onChangeText={(text) => {
               setPrice(text)
@@ -174,7 +263,7 @@ export default function CreateListingScreen() {
             <Switch
               value={isNegotiable}
               onValueChange={setIsNegotiable}
-              trackColor={{ false: '#45474b', true: '#00e1ab' }}
+              trackColor={{ false: '#8f9095', true: '#00e1ab' }}
               thumbColor={isNegotiable ? '#fff' : '#dae2fd'}
             />
           </View>
@@ -184,39 +273,75 @@ export default function CreateListingScreen() {
       {/* Category */}
       <View style={styles.field}>
         <Text style={styles.label}>CATEGORY</Text>
-        <View style={styles.categoryButtons}>
-          {['compute', 'data', 'models', 'services'].map((cat) => (
-            <Pressable
-              key={cat}
-              style={[
-                styles.categoryBtn,
-                category === cat && styles.categoryBtnActive,
-              ]}
-              onPress={() => setCategory(cat)}
-            >
-              <Text
-                style={[
-                  styles.categoryBtnText,
-                  category === cat && styles.categoryBtnTextActive,
-                ]}
-              >
-                {cat.toUpperCase()}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={styles.dropdownStack}>
+          <Pressable style={styles.dropdownTrigger} onPress={() => setMainCategoryOpen((current) => !current)}>
+            <View>
+              <Text style={styles.dropdownTriggerLabel}>Main Category</Text>
+              <Text style={styles.dropdownTriggerValue}>{mainCategory}</Text>
+            </View>
+            <Text style={styles.dropdownChevron}>{mainCategoryOpen ? '▴' : '▾'}</Text>
+          </Pressable>
+          {mainCategoryOpen && (
+            <View style={styles.dropdownMenu}>
+              <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+                {marketplaceCategoryLabels.map((label, index) => (
+                  <Pressable
+                    key={`${label}-${index}`}
+                    style={[styles.dropdownItem, label === mainCategory && styles.dropdownItemActive]}
+                    onPress={() => {
+                      setMainCategory(label as MarketplaceMainCategory)
+                      setMainCategoryOpen(false)
+                      setSubCategoryOpen(true)
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, label === mainCategory && styles.dropdownItemTextActive]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          <Pressable style={styles.dropdownTrigger} onPress={() => setSubCategoryOpen((current) => !current)}>
+            <View>
+              <Text style={styles.dropdownTriggerLabel}>Subcategory</Text>
+              <Text style={styles.dropdownTriggerValue}>{subCategory || 'Select a subcategory'}</Text>
+            </View>
+            <Text style={styles.dropdownChevron}>{subCategoryOpen ? '▴' : '▾'}</Text>
+          </Pressable>
+          {subCategoryOpen && (
+            <View style={styles.dropdownMenu}>
+              <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+                {subcategoryOptions.map((label, index) => (
+                  <Pressable
+                    key={`${label}-${index}`}
+                    style={[styles.dropdownItem, label === subCategory && styles.dropdownItemActive]}
+                    onPress={() => {
+                      setSubCategory(label)
+                      setSubCategoryOpen(false)
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, label === subCategory && styles.dropdownItemTextActive]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          <Text style={styles.helperText}>Goimagine-style category selection: choose the main category, then a matching subcategory.</Text>
         </View>
       </View>
 
       {/* Location */}
       <View style={styles.field}>
-        <Text style={styles.label}>LOCATION</Text>
+        <Text style={styles.label}>DISTANCE ORIGIN</Text>
         <TextInput
           style={styles.input}
           placeholder="e.g., Aarhus, Denmark"
-          placeholderTextColor="#45474b"
-          value={location}
-          onChangeText={setLocation}
+          placeholderTextColor="#8f9095"
+          value={distanceOrigin}
+          onChangeText={setDistanceOrigin}
         />
+        <Text style={styles.helperText}>Used as the reference point for distance in the marketplace.</Text>
       </View>
 
       {/* Submit */}
@@ -293,7 +418,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'Space Grotesk',
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     marginBottom: 8,
     textTransform: 'uppercase',
@@ -316,7 +441,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   charCount: {
-    color: '#45474b',
+    color: '#8f9095',
     fontSize: 10,
     textAlign: 'right',
     marginTop: 4,
@@ -336,30 +461,109 @@ const styles = StyleSheet.create({
     borderBottomColor: '#222a3d',
     alignItems: 'flex-start',
   },
-  // Category buttons
-  categoryButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  categoryBtn: {
+  uploadBtn: {
     backgroundColor: '#131b2e',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 2,
     borderBottomColor: '#222a3d',
+    alignItems: 'center',
   },
-  categoryBtnActive: {
-    borderBottomColor: '#abc7ff',
-    backgroundColor: '#222a3d',
-  },
-  categoryBtnText: {
-    color: '#8f9095',
+  uploadBtnText: {
+    color: '#abc7ff',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     letterSpacing: 1,
   },
-  categoryBtnTextActive: {
+  imageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  imageThumbWrap: {
+    position: 'relative',
+  },
+  imageThumb: {
+    width: 88,
+    height: 88,
+    borderRadius: 8,
+    backgroundColor: '#131b2e',
+  },
+  imageThumbRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageThumbRemoveText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  helperText: {
+    color: '#8f9095',
+    fontSize: 11,
+    marginTop: 6,
+  },
+  dropdownStack: {
+    gap: 8,
+  },
+  dropdownTrigger: {
+    backgroundColor: '#131b2e',
+    padding: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#222a3d',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownTriggerLabel: {
+    color: '#8f9095',
+    fontSize: 10,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  dropdownTriggerValue: {
+    color: '#dae2fd',
+    fontSize: 14,
+    fontWeight: '600',
+    flexShrink: 1,
+    paddingRight: 12,
+  },
+  dropdownChevron: {
+    color: '#abc7ff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dropdownMenu: {
+    backgroundColor: '#0d1117',
+    borderWidth: 1,
+    borderColor: '#222a3d',
+  },
+  dropdownScroll: {
+    maxHeight: 240,
+  },
+  dropdownItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222a3d',
+  },
+  dropdownItemActive: {
+    backgroundColor: '#131b2e',
+  },
+  dropdownItemText: {
+    color: '#dae2fd',
+    fontSize: 13,
+  },
+  dropdownItemTextActive: {
     color: '#abc7ff',
   },
   // Buttons

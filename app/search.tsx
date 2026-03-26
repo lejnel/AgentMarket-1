@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { supabase } from '../services/supabase'
+import { searchListings as searchListingsService } from '../services/listings'
 import { truncate, formatPrice, formatDistance } from '../utils/helpers'
 
 interface SearchResult {
@@ -31,7 +31,7 @@ export default function SearchScreen() {
     'controller',
   ])
 
-  const searchListings = useCallback(async (searchQuery: string) => {
+  const runSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([])
       return
@@ -39,25 +39,17 @@ export default function SearchScreen() {
 
     setLoading(true)
     try {
-      if (!supabase) {
-        // Mock results
-        setResults([
-          { id: '1', title: 'Industrial GPU Node V2', price: 2500, distance_km: 12, condition_rating: 0.92 },
-          { id: '2', title: 'Neural Mesh Controller', price: 1800, distance_km: 8, condition_rating: 0.85 },
-          { id: '3', title: 'Quantum Processing Unit', price: 5000, distance_km: 25, condition_rating: 0.78 },
-        ].filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase())))
-        return
-      }
-
-      const { data } = await supabase
-        .from('listings')
-        .select('id, title, price, distance_km, condition_rating')
-        .ilike('title', `%${searchQuery}%`)
-        .limit(20)
-
-      setResults(data || [])
+      const data = await searchListingsService(searchQuery)
+      setResults(data.map((listing) => ({
+        id: listing.id,
+        title: listing.title,
+        price: listing.price,
+        distance_km: listing.distance_km,
+        condition_rating: listing.condition_rating,
+      })))
     } catch (err) {
       console.error('Search error:', err)
+      setResults([])
     } finally {
       setLoading(false)
     }
@@ -65,11 +57,11 @@ export default function SearchScreen() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      searchListings(query)
+      runSearch(query)
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [query, searchListings])
+  }, [query, runSearch])
 
   function handleRecentSearch(recent: string) {
     setQuery(recent)
@@ -98,7 +90,7 @@ export default function SearchScreen() {
           value={query}
           onChangeText={setQuery}
           placeholder="Search listings..."
-          placeholderTextColor="#45474b"
+          placeholderTextColor="#8f9095"
           autoFocus
         />
         {query.length > 0 && (
@@ -236,7 +228,7 @@ const styles = StyleSheet.create({
   },
   recentTitle: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     marginBottom: 12,
   },
@@ -304,7 +296,7 @@ const styles = StyleSheet.create({
     color: '#abc7ff',
   },
   resultDot: {
-    color: '#45474b',
+    color: '#8f9095',
     marginHorizontal: 8,
   },
   resultDistance: {

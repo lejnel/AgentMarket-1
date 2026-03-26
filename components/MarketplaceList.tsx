@@ -7,7 +7,10 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  Platform,
+  TextInput,
 } from 'react-native'
+import Slider from '@react-native-community/slider'
 import AgentCard from './AgentCard'
 import { simulateNegotiation } from '../services/agentNegotiator'
 import { getListings, Listing } from '../services/listings'
@@ -15,7 +18,13 @@ import { useAgentIdentity } from '../context/AgentIdentityContext'
 
 export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
   const { identity } = useAgentIdentity()
-  const [distanceFilterKm, setDistanceFilterKm] = useState(15)
+  const [distanceFilterKm, setDistanceFilterKm] = useState(25)
+  const [locationLabel, setLocationLabel] = useState(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return window.localStorage.getItem('agentmarket.location') || 'Aarhus, Denmark'
+    }
+    return 'Aarhus, Denmark'
+  })
   const [negotiationLog, setNegotiationLog] = useState<any[]>([])
   const [listings, setListings] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,6 +49,25 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
     fetchListings()
   }, [distanceFilterKm])
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return
+    }
+
+    const handleListingsChanged = () => {
+      fetchListings()
+    }
+
+    window.addEventListener('agentmarket:listings-updated', handleListingsChanged)
+    return () => window.removeEventListener('agentmarket:listings-updated', handleListingsChanged)
+  }, [fetchListings])
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.localStorage.setItem('agentmarket.location', locationLabel)
+    }
+  }, [locationLabel])
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     await fetchListings()
@@ -51,6 +79,8 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
     title: listing.title,
     price: listing.price,
     distanceKm: listing.distance_km,
+    distanceOrigin: listing.distance_origin,
+    images: listing.image_urls || [],
     jsonld: {
       '@context': 'https://schema.org',
       '@type': 'Product',
@@ -65,6 +95,8 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
       },
     },
   })
+
+  const isWebGrid = Platform.OS === 'web' && !showRaw
 
   function handleNegotiate(item: any) {
     const log = simulateNegotiation(item.jsonld)
@@ -100,23 +132,34 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
         <Text style={styles.identityText}>
           {identity.agentId} — {identity.verified ? 'VERIFIED' : 'UNVERIFIED'}
         </Text>
+        <View style={styles.locationPill}>
+          <Text style={styles.locationLabel}>FROM</Text>
+          <TextInput
+            style={styles.locationInput}
+            value={locationLabel}
+            onChangeText={setLocationLabel}
+            placeholder="Change location"
+            placeholderTextColor="#8f9095"
+          />
+        </View>
       </View>
 
       {/* Distance Filter */}
       <View style={styles.filterContainer}>
         <Text style={styles.filterLabel}>DISTANCE</Text>
-        <View style={styles.filterButtons}>
-          {[10, 15, 50].map((km) => (
-            <Pressable
-              key={km}
-              style={[styles.filterBtn, distanceFilterKm === km && styles.filterBtnActive]}
-              onPress={() => setDistanceFilterKm(km)}
-            >
-              <Text style={[styles.filterBtnText, distanceFilterKm === km && styles.filterBtnTextActive]}>
-                {km}km
-              </Text>
-            </Pressable>
-          ))}
+        <View style={styles.sliderWrap}>
+          <Slider
+            style={styles.distanceSlider}
+            minimumValue={1}
+            maximumValue={100}
+            step={1}
+            minimumTrackTintColor="#abc7ff"
+            maximumTrackTintColor="#222a3d"
+            thumbTintColor="#abc7ff"
+            value={distanceFilterKm}
+            onValueChange={(value) => setDistanceFilterKm(Math.round(value))}
+          />
+          <Text style={styles.sliderValue}>{distanceFilterKm} km</Text>
         </View>
       </View>
 
@@ -125,11 +168,14 @@ export default function MarketplaceList({ showRaw }: { showRaw?: boolean }) {
 
       {/* Listings */}
       <FlatList
+        key={isWebGrid ? 'market-grid' : 'market-list'}
         data={listings.map(formatListingForCard)}
         keyExtractor={(i) => i.id}
         renderItem={({ item }) => (
-          <AgentCard item={item} onPress={() => handleNegotiate(item)} showRaw={showRaw} />
+          <AgentCard item={item} onPress={() => handleNegotiate(item)} showRaw={showRaw} compact={isWebGrid} />
         )}
+        numColumns={isWebGrid ? 2 : 1}
+        columnWrapperStyle={isWebGrid ? styles.gridRow : undefined}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -199,6 +245,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     paddingHorizontal: 4,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   statusDot: {
     width: 8,
@@ -206,10 +254,17 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#00e1ab',
     marginRight: 8,
-    shadowColor: '#00e1ab',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 8px #00e1ab',
+      },
+      default: {
+        shadowColor: '#00e1ab',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+      },
+    }),
   },
   identityText: {
     color: '#8f9095',
@@ -217,47 +272,62 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
+  locationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#131b2e',
+    borderBottomWidth: 2,
+    borderBottomColor: '#222a3d',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 8,
+  },
+  locationLabel: {
+    color: '#8f9095',
+    fontSize: 9,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  locationInput: {
+    minWidth: 160,
+    color: '#dae2fd',
+    fontSize: 12,
+    paddingVertical: 0,
+  },
   filterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
+    gap: 12,
   },
   filterLabel: {
-    color: '#45474b',
+    color: '#8f9095',
     fontSize: 10,
     letterSpacing: 2,
     marginRight: 12,
   },
-  filterButtons: {
-    flexDirection: 'row',
-    gap: 8,
+  sliderWrap: {
+    flex: 1,
   },
-  filterBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#131b2e',
-    borderBottomWidth: 2,
-    borderBottomColor: '#222a3d',
+  distanceSlider: {
+    width: '100%',
+    height: 32,
   },
-  filterBtnActive: {
-    borderBottomColor: '#abc7ff',
-    backgroundColor: '#222a3d',
-  },
-  filterBtnText: {
+  sliderValue: {
     color: '#8f9095',
     fontSize: 12,
-    fontWeight: '600',
-  },
-  filterBtnTextActive: {
-    color: '#abc7ff',
+    textAlign: 'right',
   },
   countText: {
-    color: '#6b7280',
+    color: '#8f9095',
     fontSize: 12,
     marginBottom: 12,
   },
   listContent: {
     paddingBottom: 16,
+  },
+  gridRow: {
+    gap: 12,
   },
   logContainer: {
     marginTop: 16,
@@ -275,7 +345,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   emptyLog: {
-    color: '#45474b',
+    color: '#8f9095',
     fontSize: 12,
     fontStyle: 'italic',
   },

@@ -166,7 +166,7 @@ export default function AgentApiScreen() {
             value={commandInput}
             onChangeText={setCommandInput}
             placeholder="find gpu, open sock, message..."
-            placeholderTextColor="#45474b"
+            placeholderTextColor="#8f9095"
             onSubmitEditing={handleCommandSubmit}
             autoCapitalize="none"
             autoCorrect={false}
@@ -232,8 +232,7 @@ export default function AgentApiScreen() {
               >
                 <Text style={styles.deleteBtnText}>🗑️</Text>
               </Pressable>
-            </View>
-          </Pressable>
+            </Pressable>
           ))
         )}
       </View>
@@ -350,7 +349,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     marginBottom: 8,
   },
@@ -424,7 +423,7 @@ const styles = StyleSheet.create({
   listingId: {
     fontFamily: 'monospace',
     fontSize: 11,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 1,
   },
   listingPrice: {

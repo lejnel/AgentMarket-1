@@ -12,7 +12,7 @@ const statusConfig = {
     label: 'ACTIVE',
   },
   inactive: {
-    color: '#45474b',
+    color: '#8f9095',
     label: 'INACTIVE',
   },
   negotiating: {

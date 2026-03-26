@@ -155,7 +155,7 @@ export default function AgentLinkScreen() {
           <TextInput
             style={[styles.input, error && styles.inputError]}
             placeholder="e.g., Claw, Assistant, Bot..."
-            placeholderTextColor="#45474b"
+            placeholderTextColor="#8f9095"
             value={agentName}
             onChangeText={(text) => {
               setAgentName(text)
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   charCount: {
-    color: '#45474b',
+    color: '#8f9095',
     fontSize: 10,
     alignSelf: 'flex-end',
     marginBottom: 24,
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   credentialLabel: {
     fontFamily: 'Space Grotesk',
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     marginBottom: 8,
   },

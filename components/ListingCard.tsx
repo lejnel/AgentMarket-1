@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   },
   idBadge: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     fontFamily: 'monospace',
     letterSpacing: 1,
   },

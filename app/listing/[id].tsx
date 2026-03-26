@@ -6,16 +6,19 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  Image,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { supabase } from '../../services/supabase'
 import { simulateNegotiation } from '../../services/agentNegotiator'
+import { getListing } from '../../services/listings'
 
 interface Listing {
   id: string
   title: string
   price: number
   distance_km: number
+  distance_origin?: string
+  image_urls?: string[]
   specifications: any
   condition_rating: number
   negotiation_logic: any
@@ -37,28 +40,15 @@ export default function ListingDetailScreen() {
   async function fetchListing() {
     setLoading(true)
     try {
-      if (!supabase) {
-        // Mock data
-        setListing({
-          id: id || '1',
-          title: 'Industrial GPU Node V2',
-          price: 2500,
-          distance_km: 12,
-          specifications: { cores: 8, memory: '16GB' },
-          condition_rating: 0.92,
-          negotiation_logic: { min_price: 2000 },
-          created_at: new Date().toISOString(),
-        })
+      const listingId = typeof id === 'string' ? id : Array.isArray(id) ? id[0] : undefined
+
+      if (!listingId) {
+        setListing(null)
         setLoading(false)
         return
       }
 
-      const { data } = await supabase
-        .from('listings')
-        .select('*')
-        .eq('id', id)
-        .single()
-
+      const data = await getListing(listingId)
       setListing(data)
     } catch (err) {
       console.error('Error fetching listing:', err)
@@ -127,6 +117,15 @@ export default function ListingDetailScreen() {
       {/* Title */}
       <Text style={styles.title}>{listing.title}</Text>
 
+      {/* Images */}
+      {listing.image_urls && listing.image_urls.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageStrip} contentContainerStyle={styles.imageStripContent}>
+          {listing.image_urls.map((imageUri, index) => (
+            <Image key={`${imageUri}-${index}`} source={{ uri: imageUri }} style={styles.image} />
+          ))}
+        </ScrollView>
+      )}
+
       {/* Price */}
       <View style={styles.priceRow}>
         <Text style={styles.priceLabel}>PRICE</Text>
@@ -138,6 +137,7 @@ export default function ListingDetailScreen() {
         <View style={styles.infoCard}>
           <Text style={styles.infoLabel}>DISTANCE</Text>
           <Text style={styles.infoValue}>{listing.distance_km} km</Text>
+          {listing.distance_origin && <Text style={styles.infoSubValue}>{listing.distance_origin}</Text>}
         </View>
         <View style={styles.infoCard}>
           <Text style={styles.infoLabel}>CONDITION</Text>
@@ -266,6 +266,18 @@ const styles = StyleSheet.create({
     color: '#dae2fd',
     marginBottom: 24,
   },
+  imageStrip: {
+    marginBottom: 20,
+  },
+  imageStripContent: {
+    gap: 12,
+  },
+  image: {
+    width: 240,
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: '#131b2e',
+  },
   priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -274,7 +286,7 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
   },
   priceValue: {
@@ -296,7 +308,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     marginBottom: 8,
   },
@@ -305,12 +317,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#dae2fd',
   },
+  infoSubValue: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#8f9095',
+  },
   section: {
     marginBottom: 32,
   },
   sectionTitle: {
     fontSize: 10,
-    color: '#45474b',
+    color: '#8f9095',
     letterSpacing: 2,
     marginBottom: 12,
   },

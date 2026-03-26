@@ -16,7 +16,7 @@ export default function RootLayout() {
             borderTopWidth: 1,
           },
           tabBarActiveTintColor: '#abc7ff',
-          tabBarInactiveTintColor: '#45474b',
+          tabBarInactiveTintColor: '#8f9095',
         }}
       >
         <Tabs.Screen
@@ -34,13 +34,6 @@ export default function RootLayout() {
           }}
         />
         <Tabs.Screen
-          name="agent-api"
-          options={{
-            title: 'Agent API',
-            tabBarIcon: () => <Text>🤖</Text>
-          }}
-        />
-        <Tabs.Screen
           name="messaging"
           options={{
             title: 'Messages',
@@ -54,16 +47,21 @@ export default function RootLayout() {
             tabBarIcon: () => <Text>👤</Text>
           }}
         />
-        <Tabs.Screen
-          name="settings"
-          options={{
-            title: 'Settings',
-            tabBarIcon: () => <Text>⚙️</Text>
-          }}
-        />
         {/* Hidden screens */}
         <Tabs.Screen
           name="search"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="agent-api"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
           options={{
             href: null,
           }}
@@ -88,6 +86,24 @@ export default function RootLayout() {
         />
         <Tabs.Screen
           name="onboarding"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="details"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="admin"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="listing/[id]"
           options={{
             href: null,
           }}
