@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -9,7 +9,9 @@ import {
   RefreshControl,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { supabase } from '../services/supabase'
+import { supabase, isSupabaseConfigured } from '../services/supabase'
+import { getActiveAgentId } from '../utils/activeAgent'
+import { getAdminListings } from '../services/listings'
 
 interface LinkedAgent {
   id: string
@@ -54,43 +56,87 @@ export default function DashboardScreen() {
   async function fetchDashboardData() {
     setLoading(true)
 
-    if (!supabase) {
-      // Mock data for demo
-      setLinkedAgents([
-        { id: '1', agent_name: 'Claw', agent_id: 'claw-rasmus-001', verified: true, created_at: new Date().toISOString() },
-      ])
-      setUserListings([
-        { id: '1', title: 'Industrial GPU Node V2', status: 'active', price: 2500, created_at: new Date().toISOString() },
-        { id: '2', title: 'Neural Mesh Controller', status: 'pending', price: 1800, created_at: new Date().toISOString() },
-      ])
-      setMessages({ total: 12, unread: 3, spam: 2 })
-      setLoading(false)
-      return
-    }
-
     try {
-      const { data: agents } = await supabase
+      if (!isSupabaseConfigured || !supabase) {
+        const activeAgentId = getActiveAgentId()
+        const allListings = await getAdminListings()
+        const ownedListings = allListings
+          .filter((listing) => listing.seller_id === activeAgentId)
+          .slice(0, 5)
+
+        setLinkedAgents(
+          activeAgentId && activeAgentId !== 'OPERATOR_01'
+            ? [
+                {
+                  id: activeAgentId,
+                  agent_name: activeAgentId,
+                  agent_id: activeAgentId,
+                  verified: true,
+                  created_at: new Date().toISOString(),
+                },
+              ]
+            : []
+        )
+        setUserListings(
+          ownedListings.map((listing) => ({
+            id: listing.id,
+            title: listing.title,
+            status: listing.status,
+            price: listing.price,
+            created_at: listing.created_at,
+          }))
+        )
+        setMessages({ total: 0, unread: 0, spam: 0 })
+        return
+      }
+
+      const activeAgentId = getActiveAgentId()
+
+      const { data: humanUsers } = await supabase
+        .from('human_users')
+        .select('id')
+        .eq('username', 'default_user')
+        .limit(1)
+
+      const humanId = humanUsers?.[0]?.id || null
+
+      const { data: agentTokens } = await supabase
         .from('agent_tokens')
         .select('id, agent_name, agent_id, verified, created_at')
+        .eq('human_user_id', humanId || '__none__')
+        .order('created_at', { ascending: false })
 
-      const { data: listings } = await supabase
+      const { data: agentProfiles } = await supabase
+        .from('agent_profiles')
+        .select('id, name, agent_id, verified, created_at')
+        .eq('agent_id', activeAgentId)
+        .limit(1)
+
+      const agentProfile = agentProfiles?.[0] || null
+
+      const { data: listingRows } = await supabase
         .from('listings')
         .select('id, title, status, price, created_at')
-        .limit(5)
+        .eq('seller_id', agentProfile?.id || '__none__')
+        .order('created_at', { ascending: false })
 
-      const { data: msgData } = await supabase
+      const { data: messageRows } = await supabase
         .from('messages')
         .select('spam_flag')
+        .eq('recipient_id', humanId || '__none__')
 
-      setLinkedAgents(agents || [])
-      setUserListings(listings || [])
+      setLinkedAgents(agentTokens || [])
+      setUserListings(listingRows || [])
       setMessages({
-        total: msgData?.length || 0,
-        unread: msgData?.filter(m => !m.spam_flag).length || 0,
-        spam: msgData?.filter(m => m.spam_flag).length || 0,
+        total: messageRows?.length || 0,
+        unread: messageRows?.filter((message) => !message.spam_flag).length || 0,
+        spam: messageRows?.filter((message) => message.spam_flag).length || 0,
       })
     } catch (err) {
       console.error('Error fetching dashboard data:', err)
+      setLinkedAgents([])
+      setUserListings([])
+      setMessages({ total: 0, unread: 0, spam: 0 })
     } finally {
       setLoading(false)
     }
@@ -118,7 +164,6 @@ export default function DashboardScreen() {
         />
       }
     >
-      {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.avatarPlaceholder} onPress={() => router.push('/settings')}>
           <Text style={styles.avatarText}>R</Text>
@@ -133,7 +178,6 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {/* Stats Grid */}
       <View style={styles.statsGrid}>
         <Pressable style={styles.statCard} onPress={() => router.push('/agent-link')}>
           <Text style={styles.statNumber}>{linkedAgents.length}</Text>
@@ -158,7 +202,6 @@ export default function DashboardScreen() {
         </Pressable>
       </View>
 
-      {/* Linked Agents Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>LINKED AGENTS</Text>
@@ -189,7 +232,6 @@ export default function DashboardScreen() {
         )}
       </View>
 
-      {/* Active Listings Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>YOUR LISTINGS</Text>
@@ -236,7 +278,6 @@ export default function DashboardScreen() {
         )}
       </View>
 
-      {/* Quick Actions */}
       <View style={styles.quickActions}>
         <Pressable style={styles.actionBtn} onPress={() => router.push('/messaging')}>
           <Text style={styles.actionIcon}>💬</Text>
