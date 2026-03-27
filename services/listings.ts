@@ -41,25 +41,6 @@ function daysBetween(startIso: string | undefined, end = new Date()) {
   return Math.floor((end.getTime() - start) / (1000 * 60 * 60 * 24))
 }
 
-function createPlaceholderImage(label: string, tint: string) {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
-      <defs>
-        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stop-color="#0b1326" />
-          <stop offset="100%" stop-color="${tint}" />
-        </linearGradient>
-      </defs>
-      <rect width="1200" height="800" fill="url(#g)" />
-      <circle cx="980" cy="180" r="120" fill="#abc7ff" fill-opacity="0.12" />
-      <circle cx="180" cy="620" r="160" fill="#00e1ab" fill-opacity="0.12" />
-      <text x="80" y="620" fill="#dae2fd" font-family="Space Grotesk, Arial, sans-serif" font-size="84" font-weight="700">${label}</text>
-      <text x="80" y="700" fill="#8f9095" font-family="Inter, Arial, sans-serif" font-size="34">AgentMarket listing</text>
-    </svg>
-  `
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
-}
-
 const MOCK_LISTINGS_STORAGE_KEY = 'agentmarket.mock.listings'
 
 function readMockListingsFromStorage(): Listing[] | null {
@@ -100,79 +81,7 @@ function notifyMockListingsChanged() {
   window.dispatchEvent(new Event('agentmarket:listings-updated'))
 }
 
-let mockListingStore: Listing[] = [
-  {
-    id: 'lst_sock_001',
-    title: 'Rasmus Dirty Sock - Used',
-    description: 'Authentic dirty sock from Rasmus. 48 hours of wear. Unwashed.',
-    price: 50,
-    condition_rating: 0.85,
-    distance_km: 0.5,
-    distance_origin: 'Aarhus, Denmark',
-    image_urls: [createPlaceholderImage('Dirty Sock', '#5a637a')],
-    main_category: 'Home & Living',
-    subcategory: 'Home Decor',
-    published_at: new Date().toISOString(),
-    specifications: {
-      material: 'cotton',
-      size: 'EU 42',
-      color: 'white (now gray)',
-      usage_hours: '48',
-      odor_level: 'medium',
-      washed: false,
-    },
-    negotiation_logic: 'standard',
-    status: 'active',
-    seller_id: 'sel_rasmus_001',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'lst_gpu_001',
-    title: 'Industrial GPU Node V2',
-    description: 'High-performance GPU compute node',
-    price: 2500,
-    condition_rating: 0.92,
-    distance_km: 12,
-    distance_origin: 'Aarhus, Denmark',
-    image_urls: [createPlaceholderImage('GPU Node', '#277be7')],
-    main_category: 'Handmade Supplies',
-    subcategory: 'Digital Files & Templates',
-    published_at: new Date(Date.now() - 86400000).toISOString(),
-    specifications: {
-      cores: 8192,
-      memory: '16GB GDDR6',
-      brand: 'NVIDIA',
-    },
-    negotiation_logic: 'standard',
-    status: 'active',
-    seller_id: 'sel_claw_001',
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 86400000).toISOString(),
-  },
-  {
-    id: 'lst_neural_001',
-    title: 'Neural Mesh Controller',
-    description: 'Neural network processing unit',
-    price: 1800,
-    condition_rating: 0.85,
-    distance_km: 8,
-    distance_origin: 'Copenhagen, Denmark',
-    image_urls: [createPlaceholderImage('Neural Mesh', '#00b894')],
-    main_category: 'Fine Art & Collectibles',
-    subcategory: 'Digital Art Prints',
-    published_at: new Date(Date.now() - 172800000).toISOString(),
-    specifications: {
-      throughput: '100GB/s',
-      nodes: 128,
-    },
-    negotiation_logic: 'aggressive',
-    status: 'active',
-    seller_id: 'sel_claw_001',
-    created_at: new Date(Date.now() - 172800000).toISOString(),
-    updated_at: new Date(Date.now() - 172800000).toISOString(),
-  },
-]
+let mockListingStore: Listing[] = []
 
 const storedMockListings = readMockListingsFromStorage()
 if (storedMockListings) {
